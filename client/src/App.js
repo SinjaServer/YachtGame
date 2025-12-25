@@ -24,6 +24,54 @@ const calculatePossibleScores = (dice) => {
   return scores;
 };
 
+// --- 봇의 지능적인 Keep 판단 로직 ---
+const getBotKeepDecision = (dice, scores) => {
+  const counts = Array(7).fill(0);
+  dice.forEach(d => counts[d]++);
+  
+  // 1. 현재 상태 분석
+  const maxCount = Math.max(...counts); // 가장 많이 나온 숫자의 개수
+  const targetNum = counts.indexOf(maxCount); // 그 숫자
+  
+  // 2. 스트레이트 가능성 체크 (중복 제거 후 정렬)
+  const uniqueSorted = [...new Set(dice)].sort((a,b)=>a-b);
+  
+  // 연속된 숫자 찾기 로직
+  let maxStraightLen = 1;
+  let straightKeepers = new Set();
+  
+  // 간단한 스트레이트 감지: 연속된 숫자가 3개 이상이면 그 숫자들을 킵 후보로
+  for(let i=0; i<uniqueSorted.length; i++) {
+     if (uniqueSorted.includes(uniqueSorted[i]+1) && uniqueSorted.includes(uniqueSorted[i]+2)) {
+         straightKeepers.add(uniqueSorted[i]);
+         straightKeepers.add(uniqueSorted[i]+1);
+         straightKeepers.add(uniqueSorted[i]+2);
+         if(uniqueSorted.includes(uniqueSorted[i]+3)) straightKeepers.add(uniqueSorted[i]+3);
+         maxStraightLen = straightKeepers.size;
+     }
+  }
+
+  // 3. 우선순위 기반 Keep 결정
+  let keep = [false, false, false, false, false];
+
+  // 전략 A: Yacht(5개)나 4-of-a-Kind를 노리거나, 이미 2개 이상 모인 숫자가 있을 때
+  // (단, 해당 숫자 칸이나 4-kind, yacht 칸이 비어있을 때 유효)
+  if (maxCount >= 2) {
+    // 해당 숫자만 Keep (예: 5, 5, 1, 2, 6 -> 5, 5 Keep)
+    keep = dice.map(d => d === targetNum);
+  }
+  // 전략 B: 스트레이트 노리기 (연속 3개 이상이고 스트레이트 칸이 비었을 때)
+  else if (maxStraightLen >= 3 && (scores.smallStraight === undefined || scores.largeStraight === undefined)) {
+    keep = dice.map(d => straightKeepers.has(d)); 
+  }
+  // 전략 C: 별다른 족보가 없으면 높은 숫자(4,5,6) 남기기 (초이스나 상단 점수용)
+  else {
+    keep = dice.map(d => d >= 4);
+  }
+
+  return keep;
+};
+
 function App() {
   const [view, setView] = useState('AUTH'); 
   const [user, setUser] = useState(null);
@@ -58,45 +106,68 @@ function App() {
   }, [currentPlayer, view]);
 
   const runBotTurn = async () => {
-    // 1. 봇 턴 시작
+    // 초기화
     setRollsLeft(3);
     setKept([false, false, false, false, false]);
-    setDice([1,1,1,1,1]); // 주사위 초기화 연출
+    setDice([1,1,1,1,1]); 
     await sleep(BOT_DELAY);
 
-    // 2. 주사위 굴리기 (최대 3번)
     let currentDice = [1,1,1,1,1];
+    let currentKept = [false, false, false, false, false]; // 봇의 현재 Keep 상태
     let rolls = 3;
 
-    // 간단한 AI: 랜덤하게 굴리고, 가장 좋은 점수를 확보하면 멈춤
     while (rolls > 0) {
-      // 굴리기 API 호출
+      // 1. 굴리기 (서버 API 호출)
       const res = await fetch('/api/roll', { method: 'POST' });
       const data = await res.json();
-      currentDice = data.dice; // 실제로는 Keep 로직이 필요하지만, 여기선 매번 새로 굴리는 것으로 연출 (단순화)
       
-      setDice(currentDice);
+      // Keep된 건 유지하고 나머지만 교체 (서버에서 받은 랜덤값 중 Keep 안된 위치만 반영)
+      // 첫 턴에는 currentKept가 모두 false이므로 다 바뀜
+      currentDice = currentDice.map((d, i) => currentKept[i] ? d : data.dice[i]);
+      
+      // 화면 업데이트
+      setDice([...currentDice]);
       setRollsLeft(rolls - 1);
-      await sleep(BOT_DELAY); // 굴리는 모션 대기
+      await sleep(BOT_DELAY); // 봇이 굴리는 모션 대기
 
-      // 족보 계산
+      // 2. 족보 확인 (조기 종료 조건)
       const calc = calculatePossibleScores(currentDice);
       
-      // (AI 판단) 요트나 라지 스트레이트가 나오면 즉시 스탑
-      if (calc.yacht === 50 || calc.largeStraight === 30) {
-        break;
+      // Yacht, Large Straight, Full House가 완성되었고 아직 기록 안 했다면 즉시 스탑!
+      // (욕심 부리다가 망하는 것을 방지)
+      const isYacht = calc.yacht === 50 && botScores.yacht === undefined;
+      const isL_Str = calc.largeStraight === 30 && botScores.largeStraight === undefined;
+      const isFullHouse = calc.fullHouse > 0 && botScores.fullHouse === undefined;
+
+      if ((isYacht || isL_Str || isFullHouse) && rolls < 3) {
+        break; 
       }
+
+      // 마지막 굴림이었으면 루프 종료
+      if (rolls === 1) break;
+
+      // 3. [핵심] 지능형 Keep 판단
+      // 현재 주사위 상황과 이미 채운 점수판(botScores)을 보고 결정
+      const nextKeep = getBotKeepDecision(currentDice, botScores);
+      
+      currentKept = nextKeep; // 다음 루프를 위해 변수 업데이트
+      setKept([...nextKeep]); // 사용자가 볼 수 있게 화면 업데이트
+      
+      await sleep(BOT_DELAY / 2); // 봇이 고민하는 척 딜레이
       rolls--;
     }
 
-    // 3. 점수 선택 (가장 높은 점수를 주는 빈 칸 선택)
+    // 4. 최종 점수 선택 (가장 높은 점수)
     const finalCalc = calculatePossibleScores(currentDice);
     let bestCategory = null;
     let maxScore = -1;
 
-    // 빈 칸 중에서 점수가 가장 높은 곳 찾기
-    ['1','2','3','4','5','6','choice','fourOfAKind','fullHouse','smallStraight','largeStraight','yacht'].forEach(key => {
-      if (botScores[key] === undefined) { // 아직 안 채운 칸
+    // 점수판 우선순위 (높은 점수 족보부터 확인)
+    const priorityOrder = ['yacht', 'largeStraight', 'smallStraight', 'fourOfAKind', 'fullHouse', '6', '5', '4', '3', '2', '1', 'choice'];
+
+    // 빈 칸 중 최고 점수 찾기
+    priorityOrder.forEach(key => {
+      if (botScores[key] === undefined) {
         const score = finalCalc[key];
         if (score > maxScore) {
           maxScore = score;
@@ -105,18 +176,18 @@ function App() {
       }
     });
 
-    // 만약 채울 곳이 없다면(혹은 다 0점이면) 첫 번째 빈칸 0점 처리
+    // 점수 낼 곳이 없으면(0점) 채울 곳 찾기 (점수 낮은 칸부터 희생)
     if (!bestCategory) {
-      const keys = ['1','2','3','4','5','6','choice','fourOfAKind','fullHouse','smallStraight','largeStraight','yacht'];
-      bestCategory = keys.find(k => botScores[k] === undefined);
+      const sacrificeOrder = ['1','2','3','choice','smallStraight','largeStraight','fourOfAKind','fullHouse','yacht','4','5','6'];
+      bestCategory = sacrificeOrder.find(k => botScores[k] === undefined);
       maxScore = 0;
     }
 
-    // 4. 점수 반영 및 턴 넘기기
+    // 점수 반영
     setBotScores(prev => ({ ...prev, [bestCategory]: maxScore }));
     await sleep(BOT_DELAY / 2);
     
-    // 다음 라운드 처리 (유저 턴으로)
+    // 턴 넘기기
     checkGameEnd_BotVer({ ...botScores, [bestCategory]: maxScore });
   };
 
