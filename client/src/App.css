@@ -1,38 +1,17 @@
-.App {
-  text-align: center;
-}
+.App { text-align: center; background-color: #282c34; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; }
+button { cursor: pointer; padding: 10px 20px; font-size: 16px; border-radius: 5px; border: none; background: #61dafb; color: #282c34; font-weight: bold; margin: 5px; }
+button:disabled { background: #555; color: #888; cursor: not-allowed; }
+input { padding: 10px; border-radius: 5px; border: none; margin-bottom: 10px; width: 200px; }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
+/* 주사위 스타일 */
+.dice-container { display: flex; justify-content: center; margin: 20px; }
+.die { font-size: 60px; margin: 0 10px; cursor: pointer; transition: transform 0.2s; }
+.die.kept { color: #ffd700; transform: translateY(-10px); text-shadow: 0 0 10px #ffd700; }
+.die:hover { transform: scale(1.1); }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
-
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+/* 점수판 스타일 */
+.scoreboard { background: white; color: black; padding: 20px; border-radius: 10px; min-width: 300px; margin-top: 20px; }
+.score-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #ddd; cursor: pointer; }
+.score-row:hover { background: #eee; }
+.score-row.filled { background: #ccc; cursor: default; color: #555; }
+.total-row { font-weight: bold; background: #61dafb; border-radius: 5px; margin-top: 10px; }
