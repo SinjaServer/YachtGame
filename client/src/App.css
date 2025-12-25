@@ -15,3 +15,40 @@ input { padding: 10px; border-radius: 5px; border: none; margin-bottom: 10px; wi
 .score-row:hover { background: #eee; }
 .score-row.filled { background: #ccc; cursor: default; color: #555; }
 .total-row { font-weight: bold; background: #61dafb; border-radius: 5px; margin-top: 10px; }
+
+/* --- 로그인/회원가입 폼 스타일 --- */
+.auth-container {
+  background: white;
+  color: #333;
+  padding: 40px;
+  border-radius: 15px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+}
+.auth-container h2 { margin-top: 0; color: #61dafb; text-shadow: 1px 1px 2px #333; }
+.auth-input { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+.auth-btn { width: 100%; padding: 12px; margin-top: 10px; background: #61dafb; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+.auth-btn:hover { background: #21a1f1; color: white; }
+.switch-btn { background: none; border: none; color: #555; text-decoration: underline; cursor: pointer; margin-top: 10px; font-size: 14px; }
+
+/* --- 게임 모드 선택 (로비) 스타일 --- */
+.lobby-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 30px;
+}
+.mode-card {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid #61dafb;
+  border-radius: 10px;
+  padding: 20px;
+  width: 150px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.mode-card:hover { transform: translateY(-5px); background: rgba(97, 218, 251, 0.2); }
+.mode-card h3 { margin: 10px 0; color: #61dafb; }
+.mode-card p { font-size: 12px; color: #ccc; }

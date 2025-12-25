@@ -42,25 +42,46 @@ app.post('/api/roll', (req, res) => {
     res.json({ dice });
 });
 
-// 3. 게임 종료 및 결과 저장 API (핵심!)
+// 3. 게임 종료 및 결과 저장 API (모드별 보상 차등 적용)
 app.post('/api/finish-game', async (req, res) => {
     const { userId, score, gameMode } = req.body;
     
-    // 간단한 MMR/골드 계산 로직 (솔로 플레이 기준)
-    // 점수가 150점 넘으면 승리 취급
-    const isWin = score >= 150;
-    const goldEarned = isWin ? 100 : 30;
-    const mmrChange = isWin ? 20 : -10;
+    let isWin = false;
+    let goldEarned = 0;
+    let mmrChange = 0;
+    
+    // 봇전: 150점 넘으면 승리 (보상 적음)
+    if (gameMode === 'BOT') {
+        const botScore = Math.floor(Math.random() * 50) + 130; // 봇 점수 130~180 랜덤
+        isWin = score > botScore;
+        goldEarned = isWin ? 30 : 10;
+        mmrChange = 0; // 연습모드는 MMR 변동 없음
+    } 
+    // 일반/랭크: 200점 기준 (임시 로직 - 추후 멀티플레이시 상대 점수와 비교)
+    else {
+        const targetScore = 180;
+        isWin = score >= targetScore;
+        
+        if (gameMode === 'RANK') {
+            goldEarned = isWin ? 150 : 20;
+            mmrChange = isWin ? 20 : -15;
+        } else if (gameMode === 'NORMAL') {
+            goldEarned = isWin ? 80 : 30;
+            mmrChange = 0; // 일반 게임은 MMR 영향 없음
+        } else { // CUSTOM
+            goldEarned = 0;
+            mmrChange = 0;
+        }
+    }
 
     try {
-        // 1. 게임 기록 저장
+        // 기록 저장
         await pool.execute(
             'INSERT INTO GameHistory (game_mode, winner_id) VALUES (?, ?)',
             [gameMode, isWin ? userId : null]
         );
 
-        // 2. 유저 스탯 업데이트 (골드, 승패, MMR)
-        // MMR이 0 밑으로 안 떨어지게 처리 (GREATEST 사용)
+        // 스탯 업데이트
         await pool.execute(`
             UPDATE UserStats 
             SET gold = gold + ?, 
@@ -70,7 +91,6 @@ app.post('/api/finish-game', async (req, res) => {
             WHERE user_id = ?
         `, [goldEarned, isWin ? 1 : 0, isWin ? 0 : 1, mmrChange, userId]);
 
-        // 업데이트된 최신 정보 반환
         const [updatedStats] = await pool.execute('SELECT * FROM UserStats WHERE user_id = ?', [userId]);
         
         res.json({ 
@@ -78,18 +98,14 @@ app.post('/api/finish-game', async (req, res) => {
             stats: updatedStats[0],
             result: isWin ? 'WIN' : 'LOSE',
             gold: goldEarned,
-            mmr: mmrChange
+            mmr: mmrChange,
+            mode: gameMode
         });
 
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'DB 저장 실패' });
     }
-});
-
-// 리액트 라우팅 처리
-app.get(/^\/.*$/, (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build/index.html'));
 });
 
 app.listen(port, () => { console.log(`서버 가동: ${port}`); });
